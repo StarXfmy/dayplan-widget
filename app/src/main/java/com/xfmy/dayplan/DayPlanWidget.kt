@@ -2,10 +2,10 @@ package com.xfmy.dayplan
 
 import android.app.PendingIntent
 import android.appwidget.AppWidgetManager
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.view.View
 import android.widget.RemoteViews
 import android.appwidget.AppWidgetProvider
 import org.json.JSONObject
@@ -54,7 +54,7 @@ class DayPlanWidget : AppWidgetProvider() {
 
         fun build(context: Context, id: Int, url: String): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.widget)
-            views.setOnClickPendingIntent(R.id.root, openApp(context, id, url))
+            views.setOnClickPendingIntent(R.id.root, openApp(context, id, appTarget(url)))
 
             if (url.isBlank()) {
                 views.setTextViewText(R.id.title, "Day Plan")
@@ -80,13 +80,19 @@ class DayPlanWidget : AppWidgetProvider() {
             }
 
             applyColors(views, snap)
+            // 点击跳转以快照里记的 appUrl 为准：文件名换成 widget-9tu5ms.json 这一类之后，
+            // 从地址里砍掉文件名推不出应用入口。
+            val inApp = snap.optString("appUrl", "")
+            if (inApp.startsWith("http")) views.setOnClickPendingIntent(R.id.root, openApp(context, id, inApp))
             val days = snap.optJSONArray("days")
             val day = pickToday(days)
 
             if (day == null) {
                 // 快照里没有今天这条 = 发布之后没再更新过，别拿旧数据糊弄
+                val first = days?.optJSONObject(0)?.optString("date", "") ?: ""
                 views.setTextViewText(R.id.title, "Day Plan")
-                views.setTextViewText(R.id.sub, "快照是 " + snap.optString("day", "更早") + " 的，没更新")
+                views.setTextViewText(R.id.sub, if (first.isEmpty()) "快照里没有内容，去 Day Plan 重新发布"
+                    else "快照停在 " + first + "，去 Day Plan 发布一次")
                 hideRows(views)
                 return views
             }
@@ -111,7 +117,7 @@ class DayPlanWidget : AppWidgetProvider() {
                     if (resId != 0) {
                         views.setTextViewText(resId, line)
                         views.setTextColor(resId, colorOf(snap, if (c.optBoolean("now")) "accent" else "ink"))
-                        views.setViewVisibility(resId, RemoteViews.VISIBLE)
+                        views.setViewVisibility(resId, View.VISIBLE)
                     }
                     shown++
                 }
@@ -122,13 +128,13 @@ class DayPlanWidget : AppWidgetProvider() {
                 if (resId != 0) {
                     views.setTextViewText(resId, "还有 " + more + " 节")
                     views.setTextColor(resId, colorOf(snap, "sub"))
-                    views.setViewVisibility(resId, RemoteViews.VISIBLE)
+                    views.setViewVisibility(resId, View.VISIBLE)
                     shown++
                 }
             }
             for (i in shown until 4) {
                 val resId = rowId(i)
-                if (resId != 0) views.setViewVisibility(resId, RemoteViews.GONE)
+                if (resId != 0) views.setViewVisibility(resId, View.GONE)
             }
 
             val next = day.optJSONObject("next")
@@ -136,9 +142,9 @@ class DayPlanWidget : AppWidgetProvider() {
                 views.setTextViewText(R.id.next, next.optString("text"))
                 val st = next.optString("state")
                 views.setTextColor(R.id.next, colorOf(snap, if (st == "done") "sub" else "warn"))
-                views.setViewVisibility(R.id.next, RemoteViews.VISIBLE)
+                views.setViewVisibility(R.id.next, View.VISIBLE)
             } else {
-                views.setViewVisibility(R.id.next, RemoteViews.GONE)
+                views.setViewVisibility(R.id.next, View.GONE)
             }
 
             val wx = snap.optJSONObject("wx")
@@ -146,9 +152,9 @@ class DayPlanWidget : AppWidgetProvider() {
                 var line = wx.optString("text") + " " + wx.optString("temp") + "° · " + wx.optString("city")
                 if (wx.optBoolean("offline")) line = line + " · " + wx.optString("ago") + "缓存"
                 views.setTextViewText(R.id.wx, line)
-                views.setViewVisibility(R.id.wx, RemoteViews.VISIBLE)
+                views.setViewVisibility(R.id.wx, View.VISIBLE)
             } else {
-                views.setViewVisibility(R.id.wx, RemoteViews.GONE)
+                views.setViewVisibility(R.id.wx, View.GONE)
             }
             return views
         }
@@ -174,10 +180,10 @@ class DayPlanWidget : AppWidgetProvider() {
         private fun hideRows(views: RemoteViews) {
             for (i in 0 until 4) {
                 val r = rowId(i)
-                if (r != 0) views.setViewVisibility(r, RemoteViews.GONE)
+                if (r != 0) views.setViewVisibility(r, View.GONE)
             }
-            views.setViewVisibility(R.id.next, RemoteViews.GONE)
-            views.setViewVisibility(R.id.wx, RemoteViews.GONE)
+            views.setViewVisibility(R.id.next, View.GONE)
+            views.setViewVisibility(R.id.wx, View.GONE)
         }
 
         private fun colorOf(snap: JSONObject, which: String): Int {
@@ -200,17 +206,26 @@ class DayPlanWidget : AppWidgetProvider() {
             } catch (e: Exception) { }
         }
 
-        private fun openApp(context: Context, id: Int, url: String): PendingIntent {
-            val target = if (url.contains("xfmy-local")) {
-                url.substringBefore("/widget.json") + "/kernel/index.html"
-            } else {
-                "https://starxfmy.github.io/xfmy-local/kernel/index.html"
-            }
+        private fun openApp(context: Context, id: Int, target: String): PendingIntent {
             val intent = Intent(Intent.ACTION_VIEW, Uri.parse(target))
             return PendingIntent.getActivity(
                 context, id, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
+        }
+
+        /** 取不到快照时的兜底：从快照地址推出应用入口。
+            raw.githubusercontent.com 那个域名只发原始文件、不发网页，得换成 Pages 域名。 */
+        private fun appTarget(url: String): String {
+            val raw = Regex("^https?://raw\\.githubusercontent\\.com/([^/]+)/([^/]+)/[^/]+/.*")
+                .find(url)
+            if (raw != null) {
+                return "https://" + raw.groupValues[1].lowercase() + ".github.io/" +
+                        raw.groupValues[2] + "/kernel/index.html"
+            }
+            val base = url.substringBeforeLast('/', "")
+            return if (base.contains('.')) base + "/kernel/index.html"
+            else "https://starxfmy.github.io/xfmy-local/kernel/index.html"
         }
 
         private fun fetch(url: String): String? {
@@ -231,12 +246,6 @@ class DayPlanWidget : AppWidgetProvider() {
             } finally {
                 conn?.disconnect()
             }
-        }
-
-        fun notifyAll(context: Context) {
-            val mgr = AppWidgetManager.getInstance(context)
-            val ids = mgr.getAppWidgetIds(ComponentName(context, DayPlanWidget::class.java))
-            if (ids != null) ids.forEach { refreshOne(context, mgr, it) }
         }
     }
 }

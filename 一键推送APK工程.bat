@@ -19,9 +19,9 @@ echo.
 echo ==================== how to read ====================
 echo OK   : "main -^> main". Then open the repo page, tab "Actions",
 echo        run "build APK", wait 2-4 min, download the artifact.
-echo TYPE : "authenticity of host 'github.com'" -> type yes, Enter
-echo ERR  : "remote origin already exists" -> run  git remote remove origin  then again
-echo ERR  : "Permission denied (publickey)" / "failed to push" -> copy lines to me
+echo TYPE : "authenticity of host 'github.com'" -^> type yes, Enter
+echo ERR  : "remote origin already exists" -^> run  git remote remove origin  then again
+echo ERR  : "Permission denied (publickey)" / "failed to push" -^> copy lines to me
 echo NOTE : repo must exist and be created first (ask the agent to create it)
 echo ====================================================
 git ls-files

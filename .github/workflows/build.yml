@@ -8,6 +8,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -23,7 +25,25 @@ jobs:
           gradle-version: '8.9'
 
       - name: 编译 debug 版
-        run: gradle assembleDebug --no-daemon --stacktrace
+        run: |
+          gradle assembleDebug --no-daemon --stacktrace --console=plain 2>&1 | tee /tmp/gradle.log
+          exit ${PIPESTATUS[0]}
+
+      # 失败时把报错原文推到 build-log 分支：Actions 的日志面板要登录才好翻，
+      # 而那个分支里的文件谁都能直接读，省掉"截图—猜—再截图"这一轮。
+      - name: 失败时回传报错原文
+        if: failure()
+        run: |
+          { echo "commit $GITHUB_SHA"
+            echo
+            grep -A 80 "What went wrong" /tmp/gradle.log || tail -n 120 /tmp/gradle.log
+          } > build-error.txt
+          git config user.name "build-log"
+          git config user.email "build-log@localhost"
+          git checkout -B build-log
+          git add -f build-error.txt
+          git commit -m "build failure log"
+          git push -f origin build-log
 
       - name: 上传 APK
         uses: actions/upload-artifact@v4
