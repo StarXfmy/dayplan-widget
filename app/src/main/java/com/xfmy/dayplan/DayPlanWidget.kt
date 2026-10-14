@@ -63,10 +63,11 @@ class DayPlanWidget : AppWidgetProvider() {
                 return views
             }
 
-            val raw = fetch(url)
+            val cands = variants(url)
+            val raw = fetchAny(cands)
             if (raw == null) {
                 views.setTextViewText(R.id.title, "Day Plan")
-                views.setTextViewText(R.id.sub, "取不到快照，检查网络或地址")
+                views.setTextViewText(R.id.sub, "取不到快照（试了 " + cands.size + " 个等价地址）")
                 hideRows(views)
                 return views
             }
@@ -226,6 +227,46 @@ class DayPlanWidget : AppWidgetProvider() {
             val base = url.substringBeforeLast('/', "")
             return if (base.contains('.')) base + "/kernel/index.html"
             else "https://starxfmy.github.io/xfmy-local/kernel/index.html"
+        }
+
+        /** 同一份快照在各域名下的等价地址。raw、Pages、jsDelivr 在国内都不稳，
+            所以只填一个地址、这里逐个试，哪个通用哪个——与 iOS 那份脚本同一套做法。 */
+        private fun variants(url: String): List<String> {
+            val out = ArrayList<String>()
+            fun add(u: String) { if (u.isNotBlank() && !out.contains(u)) out.add(u) }
+            val t = url.trim()
+            add(t)
+
+            val pages = Regex("^https?://([^.]+)\\.github\\.io/([^/]+)/(.+)$", RegexOption.IGNORE_CASE).find(t)
+            if (pages != null) {
+                val f = pages.groupValues[3].substringBefore('?').substringBefore('#')
+                add("https://raw.githubusercontent.com/" + pages.groupValues[1] + "/" + pages.groupValues[2] + "/main/" + f)
+                add("https://cdn.jsdelivr.net/gh/" + pages.groupValues[1] + "/" + pages.groupValues[2] + "@main/" + f)
+            }
+
+            val rawHit = Regex("^https?://raw\\.githubusercontent\\.com/([^/]+)/([^/]+)/([^/]+)/(.+)$",
+                RegexOption.IGNORE_CASE).find(t)
+            if (rawHit != null) {
+                val g = rawHit.groupValues
+                val f = g[4].substringBefore('?').substringBefore('#')
+                add("https://" + g[1].lowercase() + ".github.io/" + g[2] + "/" + f)
+                add("https://cdn.jsdelivr.net/gh/" + g[1] + "/" + g[2] + "@" + g[3] + "/" + f)
+            }
+
+            val cdn = Regex("^https?://(?:fastly\\.)?cdn\\.jsdelivr\\.net/gh/([^/]+)/([^/]+)@([^/]+)/(.+)$",
+                RegexOption.IGNORE_CASE).find(t)
+            if (cdn != null) {
+                val g = cdn.groupValues
+                val f = g[5].substringBefore('?').substringBefore('#')
+                add("https://raw.githubusercontent.com/" + g[2] + "/" + g[3] + "/" + g[4] + "/" + f)
+                add("https://" + g[2].lowercase() + ".github.io/" + g[3] + "/" + f)
+            }
+            return out
+        }
+
+        private fun fetchAny(urls: List<String>): String? {
+            for (u in urls) { val r = fetch(u); if (r != null) return r }
+            return null
         }
 
         private fun fetch(url: String): String? {

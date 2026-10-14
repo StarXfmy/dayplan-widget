@@ -51,3 +51,20 @@ jobs:
           name: dayplan-widget-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      # Artifacts 那个入口要登录 GitHub 才能下载，发给别人用等于卡住人家。
+      # 顺手发成 Release，附件匿名可下，链接固定：
+      #   https://github.com/StarXfmy/dayplan-widget/releases/latest/download/app-debug.apk
+      - name: 发成 Release（不用登录就能下）
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          APK=app/build/outputs/apk/debug/app-debug.apk
+          gh release create apk-latest \
+            --title "Day Plan 桌面小组件（调试版）" \
+            --notes "自用包，每次构建自动覆盖这个链接，装之前临时关掉小米的纯净模式。" \
+            --latest "$APK" || {
+              gh release edit apk-latest --title "Day Plan 桌面小组件（调试版）" --latest
+              gh release upload apk-latest "$APK" --clobber
+            }
