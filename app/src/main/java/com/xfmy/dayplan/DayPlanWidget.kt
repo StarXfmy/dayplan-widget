@@ -144,10 +144,10 @@ class DayPlanWidget : AppWidgetProvider() {
                 // 快照里那句 text 是发布那一刻算的死文本，直接贴会挂着一动不动（连 atMin 都不用是老毛病）。
                 // v≥3 带整张节次表 + 每门课 pStart/pEnd，这里按本机时间自己认现在上第几节；认不出才退回死文本。
                 val st = next.optString("state")
-                val auto = countText(snap, day, next)
+                val auto = countText(snap, day)
                 if (auto != null) {
-                    views.setTextViewText(R.id.next, auto[0])
-                    views.setTextColor(R.id.next, colorOf(snap, if (auto[1]) "warn" else "ink"))
+                    views.setTextViewText(R.id.next, auto.first)
+                    views.setTextColor(R.id.next, colorOf(snap, if (auto.second) "warn" else "ink"))
                     views.setViewVisibility(R.id.next, View.VISIBLE)
                 } else if (next.optString("text").isNotEmpty()) {
                     views.setTextViewText(R.id.next, next.optString("text"))
@@ -188,7 +188,7 @@ class DayPlanWidget : AppWidgetProvider() {
          * 8:00–8:40 / 8:45–9:25 那门两节的课，8:42 其实没在上，不该说「在上 · 剩 X」。
          * 老快照没有节次表或课程没带节次号时回 null，由调用处退回死文本。
          */
-        private fun countText(snap: JSONObject, day: JSONObject, next: JSONObject): Array<Any>? {
+        private fun countText(snap: JSONObject, day: JSONObject): Pair<String, Boolean>? {
             if (day.optString("date") != today()) return null
             val periods = snap.optJSONArray("periods") ?: return null
             val courses = day.optJSONArray("courses") ?: return null
@@ -232,17 +232,17 @@ class DayPlanWidget : AppWidgetProvider() {
             }
             for (j in starts.indices) {
                 if (nowMin >= starts[j] && nowMin < ends[j]) {
-                    return arrayOf("在上 " + names[j] + " · 剩 " + leftText(ends[j] - nowMin), true)
+                    return Pair("在上 " + names[j] + " · 剩 " + leftText(ends[j] - nowMin), true)
                 }
             }
             for (j in starts.indices) {
                 if (starts[j] > nowMin) {
-                    return arrayOf("下一节 " + names[j] + " · " + leftText(starts[j] - nowMin) + "后", false)
+                    return Pair("下一节 " + names[j] + " · " + leftText(starts[j] - nowMin) + "后", false)
                 }
             }
             var n = day.optInt("courseCount", 0)
             if (n <= 0) n = starts.size
-            return arrayOf("今天的 " + n + " 节课上完了", false)
+            return Pair("今天的 " + n + " 节课上完了", false)
         }
 
         /** 本机此刻是当天第几分钟。用 Calendar 而不是 Date.hours（后者已废弃，新版编译器会报错）。 */

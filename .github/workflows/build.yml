@@ -31,12 +31,16 @@ jobs:
 
       # 失败时把报错原文推到 build-log 分支：Actions 的日志面板要登录才好翻，
       # 而那个分支里的文件谁都能直接读，省掉"截图—猜—再截图"这一轮。
+      # 先抓 Kotlin 的报错行（e: file:///...kt:行号）：只贴 Gradle 堆栈等于没说清是哪个错。
       - name: 失败时回传报错原文
         if: failure()
         run: |
           { echo "commit $GITHUB_SHA"
             echo
-            grep -A 80 "What went wrong" /tmp/gradle.log || tail -n 120 /tmp/gradle.log
+            echo "--- kotlin errors ---"
+            grep -E "^e: |: error:" /tmp/gradle.log | head -n 60 || true
+            echo "--- what went wrong ---"
+            grep -A 10 "What went wrong" /tmp/gradle.log || tail -n 40 /tmp/gradle.log
           } > build-error.txt
           git config user.name "build-log"
           git config user.email "build-log@localhost"
