@@ -230,14 +230,16 @@ class DayPlanWidget : AppWidgetProvider() {
                 starts[y + 1] = ps; ends[y + 1] = pe; names[y + 1] = pn
                 x++
             }
+            // 文案用钟点不用「还剩 X 分」：安卓小组件也是"照片"（系统最少 30 分钟才刷一次），
+            // 写相对时间半小时后就旧了；写「到 11:55 / 10:25 上课」放多久都读不出错。口径同 iPhone。
             for (j in starts.indices) {
                 if (nowMin >= starts[j] && nowMin < ends[j]) {
-                    return Pair("在上 " + names[j] + " · 剩 " + leftText(ends[j] - nowMin), true)
+                    return Pair("在上 " + names[j] + " · 到 " + toClock(ends[j]), true)
                 }
             }
             for (j in starts.indices) {
                 if (starts[j] > nowMin) {
-                    return Pair("下一节 " + names[j] + " · " + leftText(starts[j] - nowMin) + "后", false)
+                    return Pair("下一节 " + toClock(starts[j]) + " · " + names[j], false)
                 }
             }
             var n = day.optInt("courseCount", 0)
@@ -251,14 +253,12 @@ class DayPlanWidget : AppWidgetProvider() {
             return cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
         }
 
-        /** 「还剩几分钟」说成人话，口径和 App、card-logic.js 一致。 */
-        private fun leftText(m: Int): String {
-            val v = if (m < 0) 0 else m
-            if (v >= 60) {
-                val h = v / 60; val r = v % 60
-                return if (r == 0) "$h 小时" else "$h 小时 $r 分"
-            }
-            return "$v 分钟"
+        /** 当天第几分钟 → 「10:25」这种钟点。放在小组件上的话就该是能久放的绝对时刻。 */
+        private fun toClock(min: Int): String {
+            val m = ((min % 1440) + 1440) % 1440
+            val h = m / 60
+            val mm = m % 60
+            return (if (h < 10) "0" else "") + h + ":" + (if (mm < 10) "0" else "") + mm
         }
 
         private fun rowId(i: Int): Int = when (i) {
